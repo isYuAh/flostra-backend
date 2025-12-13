@@ -3,6 +3,7 @@ from pathlib import Path
 
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
+from db import init_db
 
 
 def load_env_from_dotenv() -> None:
@@ -40,6 +41,7 @@ from routes_nodes import router as nodes_router
 from routes_secrets import router as secrets_router
 from routes_plugins import router as plugins_router
 from routes_workflow import router as workflow_router
+from routes_workflow_store import router as workflow_store_router
 
 app = fastapi.FastAPI()
 
@@ -55,10 +57,17 @@ app.add_middleware(
 app.include_router(nodes_router)
 app.include_router(ask_router)
 app.include_router(workflow_router)
+app.include_router(workflow_store_router)
 app.include_router(secrets_router)
 app.include_router(plugins_router)
+
+
+@app.on_event("startup")
+async def _startup() -> None:
+    # 启动时检查/创建必要的数据表
+    await init_db()
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8441, reload=False)
+    uvicorn.run("main:app", host="0.0.0.0", port=8441, reload=True)

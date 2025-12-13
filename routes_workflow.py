@@ -1,14 +1,17 @@
 import asyncio
 import copy
 import json
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from workflow_engine import (
     OverrideDTO,
@@ -18,6 +21,10 @@ from workflow_engine import (
     WorkflowNodeDTO,
     run_workflow,
 )
+from nodes import get_all_node_schemas
+from db import get_session, Workflow
+
+HEARTBEAT_INTERVAL_SECONDS = 10.0
 
 router = APIRouter()
 
@@ -39,6 +46,7 @@ class WorkflowEdgeModel(BaseModel):
     sourcePortId: str
     targetNodeId: str
     targetPortId: str
+    kind: str = Field(default="data", pattern="^(data|control)$")
 
 
 class OverrideModel(BaseModel):
@@ -53,8 +61,8 @@ class RunWorkflowRequestModel(BaseModel):
     """启动一次工作流运行的请求体"""
 
     workflowId: Optional[str] = None
-    nodes: List[WorkflowNodeModel]
-    edges: List[WorkflowEdgeModel]
+    nodes: List[WorkflowNodeModel] = Field(default_factory=list)
+    edges: List[WorkflowEdgeModel] = Field(default_factory=list)
     entryNodes: Optional[List[str]] = None
     targets: Optional[List[str]] = None
     overrides: List[OverrideModel] = Field(default_factory=list)
@@ -82,12 +90,25 @@ LAST_SPEC: Optional[RunWorkflowSpec] = None  # 仅供临时测试使用，内存
 
 
 @router.post("/workflow/run")
-async def start_workflow_run(payload: RunWorkflowRequestModel):
+async def start_workflow_run(payload: RunWorkflowRequestModel, session: AsyncSession = Depends(get_session)):
     """
     启动一次工作流运行：
     - 立即返回 runId
     - 实际执行放在后台任务中，通过 SSE 推送进度
     """
+
+    # 若指定 workflowId 且未携带图定义，则从数据库加载 definition
+    if payload.workflowId and not payload.nodes and not payload.edges:
+        wf = (
+            await session.execute(select(Workflow).where(Workflow.id == payload.workflowId))
+        ).scalar_one_or_none()
+        if not wf:
+            raise HTTPException(status_code=404, detail="workflow not found")
+        definition = wf.definition or {}
+        payload.nodes = [WorkflowNodeModel(**n) for n in definition.get("nodes", [])]  # type: ignore[arg-type]
+        payload.edges = [WorkflowEdgeModel(**e) for e in definition.get("edges", [])]  # type: ignore[arg-type]
+        payload.entryNodes = payload.entryNodes or definition.get("entryNodes")
+        payload.targets = payload.targets or definition.get("targets")
     run_id = str(uuid4())
     queue: "asyncio.Queue[WorkflowEvent]" = asyncio.Queue()
 
@@ -131,6 +152,7 @@ async def start_workflow_run(payload: RunWorkflowRequestModel):
                 source_port_id=e.sourcePortId,
                 target_node_id=e.targetNodeId,
                 target_port_id=e.targetPortId,
+                kind=e.kind or "data",
             )
             for e in payload.edges
         ],
@@ -170,7 +192,7 @@ async def start_workflow_run(payload: RunWorkflowRequestModel):
 async def run_last_workflow_via_http(request: Request):
     """
     临时调试入口：使用最近一次提交的工作流图，按 HTTP Start 配置匹配 method+path 后执行。
-    - 需至少包含一个 trigger_http 节点。
+    - 需至少包含一个 trigger.http 节点。
     - 请求 path 通过 query 参数 `path`（若未提供则用当前路由路径）与节点 params.path 匹配。
     - 仅匹配到的 HTTP Start 会被作为入口。
     """
@@ -196,7 +218,17 @@ async def run_last_workflow_via_http(request: Request):
             body = raw_body
 
     method = request.method.upper()
-    path_for_match = query.get("path") or str(request.url.path)
+
+    # 计算用于匹配的路径：优先 query，若无则用去掉当前路由前缀后的路径
+    path_for_match = query.get("path")
+    if not path_for_match:
+        current_path = str(request.url.path)
+        route_path = getattr(request.scope.get("route"), "path", None)
+        if route_path and current_path.startswith(route_path):
+            trimmed = current_path[len(route_path) :] or "/"
+            path_for_match = trimmed
+        else:
+            path_for_match = "/"
 
     context_request = {
         "method": method,
@@ -208,7 +240,7 @@ async def run_last_workflow_via_http(request: Request):
         "client": request.client.host if request.client else None,
     }
 
-    http_starts = [n for n in LAST_SPEC.nodes if n.type == "trigger_http"]
+    http_starts = [n for n in LAST_SPEC.nodes if n.type == "trigger.http"]
     if not http_starts:
         raise HTTPException(status_code=400, detail="cached workflow has no HTTP Start node")
 
@@ -229,10 +261,16 @@ async def run_last_workflow_via_http(request: Request):
     run_id = str(uuid4())
     events: List[WorkflowEvent] = []
     final_event: Optional[WorkflowEvent] = None
+    last_error: Optional[Dict[str, Any]] = None
 
     async def emit(event: WorkflowEvent) -> None:
-        nonlocal final_event
+        nonlocal final_event, last_error
         events.append(event)
+        if event.event == "node_completed" and event.data.get("status") == "error":
+            last_error = {
+                "nodeId": event.data.get("nodeId"),
+                "message": event.data.get("errorMessage"),
+            }
         if event.event == "workflow_completed":
             final_event = event
 
@@ -245,6 +283,7 @@ async def run_last_workflow_via_http(request: Request):
         "runId": run_id,
         "status": final_event.data.get("status"),
         "results": final_event.data.get("results"),
+        "error": last_error,
     }
 
 
@@ -262,7 +301,14 @@ async def stream_workflow_events(run_id: str):
     async def event_generator():
         try:
             while True:
-                event = await queue.get()
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_INTERVAL_SECONDS)
+                except asyncio.TimeoutError:
+                    heartbeat = {"runId": run_id, "ts": time.time()}
+                    yield "event: heartbeat\n"
+                    yield f"data: {json.dumps(heartbeat, ensure_ascii=False)}\n\n"
+                    continue
+
                 if event.event == "_internal_done":
                     break
 
@@ -274,3 +320,15 @@ async def stream_workflow_events(run_id: str):
             return
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.get("/workflows/{workflow_id}/graph")
+async def get_workflow_graph(workflow_id: str, includeDefinitions: bool = False):
+    """
+    查询工作流的图结构。
+    现阶段尚未接入持久化，先返回占位结构，便于前端对接。
+    """
+    resp = {"workflowId": workflow_id, "nodes": [], "edges": []}
+    if includeDefinitions:
+        resp["definitions"] = get_all_node_schemas()
+    return resp

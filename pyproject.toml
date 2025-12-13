@@ -5,8 +5,13 @@ description = "Flostra Backend"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "asyncpg>=0.31.0",
+    "asyncssh>=2.21.1",
+    "authlib>=1.6.5",
     "fastapi>=0.122.0",
+    "httpx>=0.28.1",
     "longchain>=0.4.2",
     "openai>=2.8.1",
+    "sqlalchemy[asyncio]>=2.0.44",
     "uvicorn>=0.38.0",
 ]

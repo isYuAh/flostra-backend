@@ -30,6 +30,7 @@ class WorkflowEdgeDTO:
     source_port_id: str
     target_node_id: str
     target_port_id: str
+    kind: str = "data"  # "data" or "control"
 
 
 @dataclass
@@ -73,48 +74,86 @@ def _build_graph(
     """根据节点和边构建拓扑所需的辅助结构"""
     node_map: Dict[str, WorkflowNodeDTO] = {n.id: n for n in spec.nodes}
 
-    # 出边 / 入边表
-    out_edges: Dict[str, List[WorkflowEdgeDTO]] = {n.id: [] for n in spec.nodes}
-    in_edges: Dict[str, List[WorkflowEdgeDTO]] = {n.id: [] for n in spec.nodes}
-    indegree: Dict[str, int] = {n.id: 0 for n in spec.nodes}
+    # 出边 / 入边表（区分 data 与 control）
+    out_edges_data: Dict[str, List[WorkflowEdgeDTO]] = {n.id: [] for n in spec.nodes}
+    in_edges_data: Dict[str, List[WorkflowEdgeDTO]] = {n.id: [] for n in spec.nodes}
+    out_edges_ctl: Dict[str, List[WorkflowEdgeDTO]] = {n.id: [] for n in spec.nodes}
+    in_edges_ctl: Dict[str, List[WorkflowEdgeDTO]] = {n.id: [] for n in spec.nodes}
+
+    indegree_all: Dict[str, int] = {n.id: 0 for n in spec.nodes}
+    indegree_ctl: Dict[str, int] = {n.id: 0 for n in spec.nodes}
 
     for e in spec.edges:
         if e.source_node_id not in node_map or e.target_node_id not in node_map:
             raise ValueError(f"Edge {e.id!r} references unknown node(s)")
-        out_edges[e.source_node_id].append(e)
-        in_edges[e.target_node_id].append(e)
-        indegree[e.target_node_id] += 1
+        kind = (e.kind or "data").lower()
+        if kind not in {"data", "control"}:
+            raise ValueError(f"Edge {e.id!r} has invalid kind {kind!r}")
+
+        indegree_all[e.target_node_id] += 1
+
+        if kind == "data":
+            out_edges_data[e.source_node_id].append(e)
+            in_edges_data[e.target_node_id].append(e)
+        else:
+            out_edges_ctl[e.source_node_id].append(e)
+            in_edges_ctl[e.target_node_id].append(e)
+            indegree_ctl[e.target_node_id] += 1
 
     # Kahn 拓扑排序，要求是 DAG
     queue: "collections.deque[str]" = collections.deque(
-        [nid for nid, deg in indegree.items() if deg == 0]
+        [nid for nid, deg in indegree_all.items() if deg == 0]
     )
     topo_order: List[str] = []
 
     while queue:
         nid = queue.popleft()
         topo_order.append(nid)
-        for e in out_edges.get(nid, []):
-            indegree[e.target_node_id] -= 1
-            if indegree[e.target_node_id] == 0:
+        for e in out_edges_data.get(nid, []) + out_edges_ctl.get(nid, []):
+            indegree_all[e.target_node_id] -= 1
+            if indegree_all[e.target_node_id] == 0:
                 queue.append(e.target_node_id)
 
     if len(topo_order) != len(spec.nodes):
         raise ValueError("Workflow graph contains cycles, DAG is required")
 
+    # 控制子图也需无环
+    queue_ctl: "collections.deque[str]" = collections.deque(
+        [nid for nid, deg in indegree_ctl.items() if deg == 0]
+    )
+    visited_ctl: List[str] = []
+    while queue_ctl:
+        nid = queue_ctl.popleft()
+        visited_ctl.append(nid)
+        for e in out_edges_ctl.get(nid, []):
+            indegree_ctl[e.target_node_id] -= 1
+            if indegree_ctl[e.target_node_id] == 0:
+                queue_ctl.append(e.target_node_id)
+    nodes_with_ctl = {nid for nid, edges in in_edges_ctl.items() if edges} | {
+        nid for nid, edges in out_edges_ctl.items() if edges
+    }
+    if nodes_with_ctl and len(visited_ctl) < len(nodes_with_ctl):
+        raise ValueError("Control subgraph contains cycles, DAG is required")
+
     # 出度为 0 的节点（sink）
-    sink_nodes = [nid for nid, outs in out_edges.items() if not outs]
+    sink_nodes = [
+        nid
+        for nid in node_map
+        if not out_edges_data.get(nid) and not out_edges_ctl.get(nid)
+    ]
 
     # 入度为 0 的节点（source）
-    source_nodes = [nid for nid, deg in indegree.items() if deg == 0]
+    source_nodes = [nid for nid, deg in indegree_all.items() if deg == 0]
 
     # End 节点：约定 type == "end"
     end_nodes = [nid for nid, n in node_map.items() if n.type == "end"]
 
     return {
         "node_map": node_map,
-        "out_edges": out_edges,
-        "in_edges": in_edges,
+        "out_edges_data": out_edges_data,
+        "in_edges_data": in_edges_data,
+        "out_edges_ctl": out_edges_ctl,
+        "in_edges_ctl": in_edges_ctl,
         "topo_order": topo_order,
         "sink_nodes": sink_nodes,
         "source_nodes": source_nodes,
@@ -137,7 +176,7 @@ def _apply_overrides(
 def _merge_inputs_for_node(
     node_id: str,
     node: WorkflowNodeDTO,
-    in_edges: Dict[str, List[WorkflowEdgeDTO]],
+    in_edges_data: Dict[str, List[WorkflowEdgeDTO]],
     context_outputs: Dict[str, JsonDict],
 ) -> JsonDict:
     """
@@ -152,7 +191,7 @@ def _merge_inputs_for_node(
         inputs.update(node.port_constants)
 
     # 2) 再用连线覆盖：有上游时，以上游为准
-    for edge in in_edges.get(node_id, []):
+    for edge in in_edges_data.get(node_id, []):
         source_outputs = context_outputs.get(edge.source_node_id, {})
         if edge.source_port_id in source_outputs:
             inputs[edge.target_port_id] = source_outputs[edge.source_port_id]
@@ -183,7 +222,6 @@ def _resolve_secrets(obj: Any) -> Any:
 
     return obj
 
-
 async def run_workflow(
     run_id: str,
     spec: RunWorkflowSpec,
@@ -198,8 +236,10 @@ async def run_workflow(
     """
     graph = _build_graph(spec)
     node_map: Dict[str, WorkflowNodeDTO] = graph["node_map"]
-    out_edges: Dict[str, List[WorkflowEdgeDTO]] = graph["out_edges"]
-    in_edges: Dict[str, List[WorkflowEdgeDTO]] = graph["in_edges"]
+    out_edges_data: Dict[str, List[WorkflowEdgeDTO]] = graph["out_edges_data"]
+    in_edges_data: Dict[str, List[WorkflowEdgeDTO]] = graph["in_edges_data"]
+    out_edges_ctl: Dict[str, List[WorkflowEdgeDTO]] = graph["out_edges_ctl"]
+    in_edges_ctl: Dict[str, List[WorkflowEdgeDTO]] = graph["in_edges_ctl"]
     topo_order: List[str] = graph["topo_order"]
     sink_nodes: List[str] = graph["sink_nodes"]
     end_nodes: List[str] = graph["end_nodes"]
@@ -210,19 +250,55 @@ async def run_workflow(
         overrides_by_node.setdefault(ov.node_id, []).append(ov)
 
     context_outputs: Dict[str, JsonDict] = {}
+    control_fired: set[str] = set()  # 已触发的控制边 ID
+
+    def should_skip_node(node_id: str) -> bool:
+        ctl_in_edges = in_edges_ctl.get(node_id, [])
+        data_in_edges = in_edges_data.get(node_id, [])
+
+        # 控制门槛：若有控制入边，则需要全部触发才执行
+        if ctl_in_edges:
+            for e in ctl_in_edges:
+                if e.id not in control_fired:
+                    return True
+
+        # 无数据入边 & 无常量/override 时可视为“纯控制驱动”，已经通过上面的控制门槛即可执行
+        if not data_in_edges and not node_map[node_id].port_constants and not overrides_by_node.get(node_id):
+            return False
+
+        # 无入边的节点（数据）永远执行
+        if not data_in_edges:
+            return False
+        # 只要有常量或 overrides，就执行
+        if node_map[node_id].port_constants:
+            return False
+        if overrides_by_node.get(node_id):
+            return False
+        # 如果至少有一个数据入边已经产生了对应端口的输出，则执行
+        for e in data_in_edges:
+            if e.source_node_id in context_outputs:
+                src_out = context_outputs[e.source_node_id]
+                if e.source_port_id in src_out:
+                    return False
+        # 没有任何可用输入，则跳过
+        return True
 
     # 计算可达子图（REACHABLE_SET）
     all_nodes = set(node_map.keys())
     reachable: set[str]
 
     if not spec.entry_nodes:
-        # 默认入口：若无 HTTP 请求上下文，则跳过 trigger_http 作为起点
-        default_entries = [nid for nid in graph["source_nodes"]]
-        if not (context or {}).get("request"):
-            default_entries = [
-                nid for nid in default_entries if node_map[nid].type != "trigger_http"
-            ]
-        # 如果全被过滤掉且没有 HTTP 上下文，则不回退整图，保持空入口（视为不执行任何节点）
+        # 优先使用“触发器”类型作为默认入口，避免无边的业务节点被误当作起点执行
+        trigger_entries = [nid for nid in graph["source_nodes"] if node_map[nid].type.startswith("trigger.")]
+        if trigger_entries:
+            default_entries = trigger_entries
+            if not (context or {}).get("request"):
+                default_entries = [nid for nid in default_entries if node_map[nid].type != "trigger.http"]
+        else:
+            # 无触发器时才退回到所有入度为 0 的节点
+            default_entries = [nid for nid in graph["source_nodes"]]
+
+        # 如果过滤后为空，则保持空入口（视为不执行任何节点）
         if default_entries:
             spec.entry_nodes = default_entries
     
@@ -242,7 +318,7 @@ async def run_workflow(
             if nid in reachable:
                 continue
             reachable.add(nid)
-            for edge in out_edges.get(nid, []):
+            for edge in out_edges_data.get(nid, []) + out_edges_ctl.get(nid, []):
                 queue.append(edge.target_node_id)
     else:
         # 仍然没有入口，则整图执行
@@ -256,6 +332,15 @@ async def run_workflow(
     for node_id in effective_order:
         node = node_map[node_id]
 
+        if should_skip_node(node_id):
+            await emit(
+                WorkflowEvent(
+                    event="node_skipped",
+                    data={"runId": run_id, "nodeId": node_id, "reason": "no_input"},
+                )
+            )
+            continue
+
         await emit(
             WorkflowEvent(
                 event="node_started",
@@ -267,7 +352,7 @@ async def run_workflow(
         base_inputs = _merge_inputs_for_node(
             node_id=node_id,
             node=node,
-            in_edges=in_edges,
+            in_edges_data=in_edges_data,
             context_outputs=context_outputs,
         )
         inputs = _apply_overrides(
@@ -288,7 +373,28 @@ async def run_workflow(
         try:
             node_cls = get_node_cls(node.type)
             outputs = await node_cls.run(safe_inputs, safe_params)
-            context_outputs[node_id] = outputs
+
+            control_signals: Optional[Dict[str, bool]] = None
+            data_outputs: Any = outputs
+            if isinstance(outputs, dict):
+                cs_candidate = outputs.get("controlSignals")
+                if isinstance(cs_candidate, dict):
+                    control_signals = {
+                        k: bool(v) for k, v in cs_candidate.items()
+                    }
+                data_outputs = dict(outputs)
+                if "controlSignals" in data_outputs:
+                    data_outputs.pop("controlSignals")
+
+            context_outputs[node_id] = data_outputs
+
+            # 触发控制边：默认触发该节点所有控制输出；若提供 controlSignals，则只触发为 True 的端口
+            allowed_ports: Optional[set[str]] = None
+            if control_signals is not None:
+                allowed_ports = {pid for pid, flag in control_signals.items() if flag}
+            for e in out_edges_ctl.get(node_id, []):
+                if allowed_ports is None or e.source_port_id in allowed_ports:
+                    control_fired.add(e.id)
 
             await emit(
                 WorkflowEvent(
