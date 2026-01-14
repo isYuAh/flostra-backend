@@ -52,7 +52,7 @@ class EndNode(WorkflowNode):
         }
 
     @classmethod
-    async def run(cls, inputs: JsonDict, params: JsonDict) -> JsonDict:
+    async def run(cls, inputs: JsonDict, params: JsonDict, context: JsonDict = None) -> JsonDict:
         ports = params.get("ports")
         outputs: Dict[str, Any] = {}
 

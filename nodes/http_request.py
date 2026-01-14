@@ -3,11 +3,13 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List, Union
 
 import httpx
 
 from .base import JsonDict, WorkflowNode, register_node
+from io_utils import FileIoService
+from runtime_files import is_file_ref
 
 
 @register_node
@@ -17,6 +19,7 @@ class HttpRequestNode(WorkflowNode):
     - 使用 HTTP 调用外部 API
     - URL / METHOD / BODY 均可由输入端口提供
     - extras 承载 headers/query/auth 等信息
+    - 支持文件上传 (Multipart)
     """
 
     type = "http-request"
@@ -33,6 +36,7 @@ class HttpRequestNode(WorkflowNode):
                 {"name": "url", "label": "URL", "type": "string", "required": True},
                 {"name": "method", "label": "HTTP 方法", "type": "string", "required": False},
                 {"name": "body", "label": "请求 Body", "type": "any", "required": False},
+                {"name": "files", "label": "文件 (支持单个或列表)", "type": ["object", "array"], "required": False},
                 {"name": "extras", "label": "附加参数", "type": ["object", "string"], "required": False},
             ],
             "outputs": [
@@ -47,15 +51,19 @@ class HttpRequestNode(WorkflowNode):
         }
 
     @classmethod
-    async def run(cls, inputs: JsonDict, params: JsonDict) -> JsonDict:
+    async def run(cls, inputs: JsonDict, params: JsonDict, context: JsonDict = None) -> JsonDict:
         method = (inputs.get("method") or "GET").upper()
         url = inputs.get("url")
         if not url:
             raise ValueError("HTTP 请求节点缺少 URL（请在输入端口 url 提供）")
+        
+        if not context:
+            raise ValueError("HTTP节点需要运行时上下文")
 
         extras_raw = inputs.get("extras")
         headers, query, auth_header = cls._normalize_extras(extras_raw)
         body = inputs.get("body")
+        files_input = inputs.get("files")
 
         timeout = cls._parse_timeout(params.get("timeout"))
         retry = cls._parse_retry(params.get("retry"))
@@ -63,10 +71,52 @@ class HttpRequestNode(WorkflowNode):
 
         json_body: Any = None
         data_body: Any = None
-        if isinstance(body, (dict, list)):
-            json_body = body
-        elif body is not None:
-            data_body = str(body)
+        multipart_files: Any = None
+
+        # 处理文件上传
+        if files_input:
+            multipart_files = []
+            files_to_process = []
+            if isinstance(files_input, list):
+                files_to_process = files_input
+            elif isinstance(files_input, dict):
+                files_to_process = [files_input]
+            
+            for f in files_to_process:
+                if is_file_ref(f):
+                    content, filename, mime = await FileIoService.get_file_bytes(context, f)
+                    # httpx files format: (field_name, (filename, content, mime_type))
+                    # Default field name to 'file' if generic list, or use name from ref if possible?
+                    # For now use 'file' as key. If user needs specific keys, they might need a more complex input structure.
+                    multipart_files.append(("file", (filename, content, mime)))
+            
+            if not multipart_files:
+                multipart_files = None # No valid files found
+
+        # 如果有文件，Body通常作为 form data
+        if multipart_files:
+            data_body = {}
+            if isinstance(body, dict):
+                 # Flatten body for data fields in multipart
+                 for k, v in body.items():
+                     if isinstance(v, (str, int, float, bool)):
+                         data_body[k] = str(v)
+                     else:
+                         data_body[k] = json.dumps(v)
+            elif body is not None:
+                # If body is string, ignore or try to use? 
+                pass 
+            
+            # Remove Content-Type if set, let httpx set boundary
+            if "Content-Type" in headers:
+                headers.pop("Content-Type")
+                
+        else:
+            # Normal Body Processing
+            if isinstance(body, (dict, list)):
+                json_body = body
+            elif body is not None:
+                data_body = str(body)
 
         if auth_header and "Authorization" not in headers:
             headers["Authorization"] = auth_header
@@ -83,6 +133,7 @@ class HttpRequestNode(WorkflowNode):
                         params=query or None,
                         json=json_body,
                         data=data_body,
+                        files=multipart_files,
                     )
                 status = resp.status_code
                 if status in cls._retriable_statuses() and attempt < retry:
@@ -110,62 +161,3 @@ class HttpRequestNode(WorkflowNode):
             resp_body = resp.text
 
         return {"status": status, "headers": resp_headers, "body": resp_body}
-
-    @staticmethod
-    def _parse_timeout(val: Any) -> float:
-        try:
-            timeout = float(val) if val is not None else 10.0
-            if timeout <= 0:
-                return 10.0
-            return timeout
-        except (TypeError, ValueError):
-            return 10.0
-
-    @staticmethod
-    def _parse_retry(val: Any) -> int:
-        try:
-            retry = int(val) if val is not None else 0
-            return max(retry, 0)
-        except (TypeError, ValueError):
-            return 0
-
-    @staticmethod
-    def _normalize_extras(extras: Any) -> tuple[Dict[str, Any], Dict[str, Any], Optional[str]]:
-        if extras is None:
-            return {}, {}, None
-        if isinstance(extras, str):
-            try:
-                extras = json.loads(extras)
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"extras 需为对象或可解析为 JSON 的字符串：{exc}") from exc
-        if not isinstance(extras, dict):
-            raise ValueError("extras 需为对象或可解析为 JSON 的字符串")
-
-        headers = extras.get("headers") or {}
-        if not isinstance(headers, dict):
-            raise ValueError("extras.headers 必须是对象")
-
-        query = extras.get("query") or {}
-        if not isinstance(query, dict):
-            raise ValueError("extras.query 必须是对象")
-
-        auth_header: Optional[str] = None
-        auth_cfg = extras.get("auth")
-        if isinstance(auth_cfg, dict):
-            if "bearer" in auth_cfg and auth_cfg.get("bearer"):
-                auth_header = f"Bearer {auth_cfg.get('bearer')}"
-            elif "basic" in auth_cfg and isinstance(auth_cfg.get("basic"), dict):
-                basic = auth_cfg["basic"]
-                username = basic.get("username")
-                password = basic.get("password")
-                if username is not None and password is not None:
-                    token = base64.b64encode(f"{username}:{password}".encode()).decode()
-                    auth_header = f"Basic {token}"
-        elif isinstance(auth_cfg, str) and auth_cfg:
-            auth_header = f"Bearer {auth_cfg}"
-
-        return headers, query, auth_header
-
-    @staticmethod
-    def _retriable_statuses() -> set[int]:
-        return {429, 500, 501, 502, 503, 504, 505, 506, 507, 508, 509, 510, 511}

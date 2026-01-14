@@ -1,0 +1,151 @@
+[
+  {
+    "description": "在 system prompt 中加入“请用中文回答”",
+    "kind": "plugin",
+    "label": "语言：中文",
+    "parameters": [],
+    "type": "lang-zh"
+  },
+  {
+    "description": "限制用户输入长度，超过则截断并追加提示",
+    "kind": "plugin",
+    "label": "输入截断",
+    "parameters": [
+      {
+        "default": 4000,
+        "extra": {
+          "min": 1,
+          "placeholder": "默认 4000"
+        },
+        "label": "最大字符数",
+        "name": "max_chars",
+        "required": true,
+        "type": "number",
+        "widget": "input"
+      },
+      {
+        "default": "（用户输入过长，已截断）",
+        "label": "截断提示",
+        "name": "notice",
+        "required": false,
+        "type": "string",
+        "widget": "textarea"
+      }
+    ],
+    "type": "input-truncate"
+  },
+  {
+    "description": "向模型暴露一个获取当前时间的工具 now()",
+    "kind": "tool",
+    "label": "工具：当前时间",
+    "parameters": [],
+    "type": "tool-datetime"
+  },
+  {
+    "description": "对模型输出应用敏感词替换（纯文本级别）",
+    "kind": "plugin",
+    "label": "安全过滤",
+    "parameters": [
+      {
+        "default": [
+          "傻逼",
+          "操",
+          "fuck"
+        ],
+        "extra": {
+          "placeholder": "[\"word1\", \"word2\"]"
+        },
+        "label": "敏感词列表",
+        "name": "blocked_words",
+        "required": true,
+        "type": "array",
+        "widget": "json-editor"
+      },
+      {
+        "default": "***",
+        "label": "替换为",
+        "name": "mask",
+        "required": false,
+        "type": "string",
+        "widget": "input"
+      },
+      {
+        "default": true,
+        "label": "大小写不敏感",
+        "name": "case_insensitive",
+        "required": false,
+        "type": "boolean",
+        "widget": "switch"
+      }
+    ],
+    "type": "safety-filter"
+  },
+  {
+    "description": "向模型暴露 http_get/http_post（限制域名白名单）",
+    "kind": "tool",
+    "label": "工具：HTTP",
+    "parameters": [
+      {
+        "default": [
+          "jsonplaceholder.typicode.com"
+        ],
+        "extra": {
+          "placeholder": "[\"api.example.com\"]"
+        },
+        "label": "允许的主机名",
+        "name": "allowed_hosts",
+        "required": true,
+        "type": "array",
+        "widget": "json-editor"
+      },
+      {
+        "default": 8,
+        "label": "超时（秒）",
+        "name": "timeout",
+        "required": false,
+        "type": "number",
+        "widget": "input"
+      }
+    ],
+    "type": "tool-http"
+  },
+  {
+    "description": "暴露 calc(expression) 安全计算四则运算",
+    "kind": "tool",
+    "label": "工具：计算器",
+    "parameters": [],
+    "type": "tool-math"
+  },
+  {
+    "description": "为模型暴露 list_files/get_base64/docx_to_text/xlsx_to_rows，数据来源于当前对话附带的 attachments",
+    "kind": "tool",
+    "label": "工具：附件",
+    "parameters": [
+      {
+        "default": 8000000,
+        "label": "单文件大小上限（字节）",
+        "name": "max_bytes",
+        "required": false,
+        "type": "number",
+        "widget": "input"
+      },
+      {
+        "default": 20000,
+        "label": "docx 文本截断上限",
+        "name": "text_max_chars",
+        "required": false,
+        "type": "number",
+        "widget": "input"
+      },
+      {
+        "default": 200,
+        "label": "xlsx 最大行数",
+        "name": "rows_max",
+        "required": false,
+        "type": "number",
+        "widget": "input"
+      }
+    ],
+    "type": "tool-attachments"
+  }
+]

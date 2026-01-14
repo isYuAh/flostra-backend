@@ -48,28 +48,44 @@ class TemplateStringNode(WorkflowNode):
         }
 
     @classmethod
-    async def run(cls, inputs: JsonDict, params: JsonDict) -> JsonDict:
+    async def run(cls, inputs: JsonDict, params: JsonDict, context: JsonDict = None) -> JsonDict:
         template = params.get("template") or ""
         if not isinstance(template, str):
             template = str(template)
 
         raw_context = inputs.get("context")
 
+        # 1. 解析显式输入的 context
         if isinstance(raw_context, (dict, list)):
-            ctx: Any = raw_context
+            data_ctx: Any = raw_context
         elif isinstance(raw_context, str):
             try:
                 parsed = json.loads(raw_context)
             except json.JSONDecodeError:
                 parsed = raw_context
             if isinstance(parsed, (dict, list)):
-                ctx = parsed
+                data_ctx = parsed
             else:
-                ctx = {"value": parsed}
+                data_ctx = {"value": parsed}
+        elif raw_context is not None:
+             # 有输入但不是 dict/list/str，包装成 value
+            data_ctx = {"value": raw_context}
         else:
-            ctx = {"value": raw_context}
+            # 没有显式输入，初始化为空字典
+            data_ctx = {}
 
-        text = _render_template_string(template, ctx)
+        # 2. 构造混合上下文：优先使用数据上下文，合并全局上下文
+        # 如果 data_ctx 是字典，则可以将 global context 作为备选或合并进来
+        # 策略：如果 data_ctx 是 dict，则让它 copy 一份，并把 global context 的 key 注入进去（不覆盖 data_ctx 原有 key）
+        # 这样 {{user.id}} 可以访问 global，而 {{local_var}} 访问 input
+        render_scope = data_ctx
+        if isinstance(data_ctx, dict) and isinstance(context, dict):
+            render_scope = context.copy()
+            render_scope.update(data_ctx)  # input 优先级更高
+            # 特殊：为了方便访问 global context 本身，也可以注入一个 __global__ 或 context 变量
+            render_scope["context"] = context
+
+        text = _render_template_string(template, render_scope)
         return {"text": text}
 
 

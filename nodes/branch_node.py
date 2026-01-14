@@ -74,7 +74,7 @@ class BranchNode(WorkflowNode):
         }
 
     @classmethod
-    async def run(cls, inputs: JsonDict, params: JsonDict) -> JsonDict:
+    async def run(cls, inputs: JsonDict, params: JsonDict, context: JsonDict = None) -> JsonDict:
         inp = inputs.get("input")
         ctx = inputs.get("context")
         cases = params.get("cases") or []

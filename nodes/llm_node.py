@@ -118,7 +118,7 @@ class SuperLLMNode(WorkflowNode):
         }
 
     @classmethod
-    async def run(cls, inputs: JsonDict, params: JsonDict) -> JsonDict:
+    async def run(cls, inputs: JsonDict, params: JsonDict, context: JsonDict = None) -> JsonDict:
         message = inputs.get("message")
         if message is None:
             raise ValueError("LLM 节点缺少必需的输入 message")

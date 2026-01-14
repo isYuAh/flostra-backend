@@ -13,6 +13,10 @@ from . import renderer_node  # noqa: F401
 from . import branch_node  # noqa: F401
 from . import llm_node  # noqa: F401
 from . import ssh  # noqa: F401
+from . import redis_node  # noqa: F401
+from . import rabbitmq_node  # noqa: F401
+from . import s3_node  # noqa: F401
+from . import sql_node  # noqa: F401
 
 __all__ = [
     "JsonDict",

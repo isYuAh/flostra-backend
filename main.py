@@ -1,9 +1,18 @@
 import os
+import logging
 from pathlib import Path
 
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
 from db import init_db
+
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s:%(lineno)d %(message)s",
+    )
+
+logger = logging.getLogger(__name__)
 
 
 def load_env_from_dotenv() -> None:
@@ -64,8 +73,32 @@ app.include_router(plugins_router)
 
 @app.on_event("startup")
 async def _startup() -> None:
+    # HTTP 进程仅负责 API；worker 由独立入口启动
+
+    # 启动时导出静态 definitions（给 Java/SpringBoot 消费）；失败不影响服务启动
+    try:
+        from definitions_exporter import export_definitions_if_enabled
+        logger.info("Startup: begin export definitions")
+        exported = export_definitions_if_enabled(base_dir=Path(__file__).resolve().parent)
+        if exported:
+            logging.getLogger(__name__).info(
+                "Exported definitions: %s",
+                {k: str(v) for k, v in exported.items()},
+            )
+        logger.info("Startup: export definitions done")
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger(__name__).warning("Export definitions failed: %s", exc)
+
     # 启动时检查/创建必要的数据表
+    logger.info("Startup: init_db begin")
     await init_db()
+    logger.info("Startup: init_db done")
+
+
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    logger.info("Shutdown: complete")
+
 
 if __name__ == "__main__":
     import uvicorn

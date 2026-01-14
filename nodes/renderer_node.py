@@ -42,6 +42,6 @@ class RendererNode(WorkflowNode):
         }
 
     @classmethod
-    async def run(cls, inputs: JsonDict, params: JsonDict) -> JsonDict:
+    async def run(cls, inputs: JsonDict, params: JsonDict, context: JsonDict = None) -> JsonDict:
         text = inputs.get("text", "")
         return {"text": text, "title": params.get("title", "渲染结果")}

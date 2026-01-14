@@ -57,8 +57,11 @@ class JsonExtractNode(WorkflowNode):
         }
 
     @classmethod
-    async def run(cls, inputs: JsonDict, params: JsonDict) -> JsonDict:
+    async def run(cls, inputs: JsonDict, params: JsonDict, context: JsonDict = None) -> JsonDict:
         raw = inputs.get("input")
+        if raw is None:
+            raise ValueError("JSON 提取节点缺少输入数据 (input 端口)")
+            
         if isinstance(raw, str):
             try:
                 data: Any = json.loads(raw)
@@ -138,7 +141,7 @@ class JsonBuildNode(WorkflowNode):
         }
 
     @classmethod
-    async def run(cls, inputs: JsonDict, params: JsonDict) -> JsonDict:
+    async def run(cls, inputs: JsonDict, params: JsonDict, context: JsonDict = None) -> JsonDict:
         fields = params.get("fields") or []
         obj: Dict[str, Any] = {}
 

@@ -1,0 +1,1721 @@
+[
+  {
+    "category": "触发器",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "用于调试或手动启动工作流，payload 由端口常量或 overrides 提供并透传",
+    "icon": "trigger",
+    "inputs": [
+      {
+        "desc": "运行时通过端口常量或 overrides 注入的数据",
+        "label": "输入数据",
+        "name": "payload",
+        "required": false,
+        "type": "object"
+      }
+    ],
+    "label": "手动触发器",
+    "outputs": [
+      {
+        "label": "输出数据",
+        "name": "payload",
+        "required": false,
+        "type": "object"
+      }
+    ],
+    "parameters": [],
+    "type": "trigger.manual"
+  },
+  {
+    "category": "触发器",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "从外部 HTTP 请求触发工作流，支持按 method+path 匹配入口",
+    "icon": "trigger",
+    "inputs": [],
+    "label": "HTTP 触发器",
+    "outputs": [
+      {
+        "label": "HTTP 方法",
+        "name": "method",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "合并数据 (body 覆盖 query)",
+        "name": "data",
+        "required": false,
+        "type": "object"
+      },
+      {
+        "label": "原始请求对象",
+        "name": "request",
+        "required": false,
+        "type": "object"
+      }
+    ],
+    "parameters": [
+      {
+        "default": "POST",
+        "extra": {
+          "options": [
+            {
+              "label": "GET",
+              "value": "GET"
+            },
+            {
+              "label": "POST",
+              "value": "POST"
+            },
+            {
+              "label": "PUT",
+              "value": "PUT"
+            },
+            {
+              "label": "DELETE",
+              "value": "DELETE"
+            }
+          ]
+        },
+        "label": "HTTP 方法",
+        "name": "method",
+        "required": true,
+        "type": "string",
+        "widget": "select"
+      },
+      {
+        "default": "/chat",
+        "desc": "用于发布为 HTTP Endpoint 的路径（同一工作流内应唯一）",
+        "extra": {
+          "placeholder": "/chat"
+        },
+        "label": "路径",
+        "name": "path",
+        "required": true,
+        "type": "string",
+        "widget": "input"
+      }
+    ],
+    "type": "trigger.http"
+  },
+  {
+    "category": "控制",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "工作流结束节点，作为结果输出节点；支持配置多个结果端口",
+    "icon": "end",
+    "inputs": [],
+    "label": "结束",
+    "outputs": [],
+    "parameters": [
+      {
+        "default": [
+          {
+            "label": "结果值",
+            "name": "value",
+            "required": false
+          }
+        ],
+        "desc": "配置 End 节点的结果端口；id 作为端口 ID，label 为展示名称。所有端口类型均为 any，执行时会将对应输入端口的值原样透传到结果中。",
+        "extra": {
+          "effects": [
+            "cal_input_ports"
+          ],
+          "role": "end-ports",
+          "template": {
+            "label": "",
+            "name": ""
+          }
+        },
+        "label": "结果端口配置",
+        "name": "ports",
+        "required": false,
+        "type": "array",
+        "widget": "ports-list"
+      }
+    ],
+    "type": "end"
+  },
+  {
+    "category": "逻辑",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "根据配置的路径从输入 JSON 中提取多个字段作为输出端口",
+    "icon": "json",
+    "inputs": [
+      {
+        "desc": "上游节点输出的 JSON 对象，或 JSON 字符串",
+        "label": "JSON 输入",
+        "name": "input",
+        "required": true,
+        "type": [
+          "object",
+          "string"
+        ]
+      }
+    ],
+    "label": "JSON 提取",
+    "outputs": [],
+    "parameters": [
+      {
+        "desc": "id = 输出端口 ID；label = 显示名称；path = JSON 路径，如 user.name 或 items[0].price",
+        "extra": {
+          "effects": [
+            "cal_output_ports"
+          ],
+          "role": "json-extract-ports",
+          "template": {
+            "label": "",
+            "name": "",
+            "path": ""
+          }
+        },
+        "label": "输出端口配置",
+        "name": "ports",
+        "required": false,
+        "type": "array",
+        "widget": "ports-list"
+      }
+    ],
+    "type": "json-extract"
+  },
+  {
+    "category": "逻辑",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "将多个输入端口的值聚合为一个 JSON 对象输出",
+    "icon": "json",
+    "inputs": [],
+    "label": "JSON 构造",
+    "outputs": [
+      {
+        "label": "JSON 输出",
+        "name": "output",
+        "required": false,
+        "type": "object"
+      }
+    ],
+    "parameters": [
+      {
+        "desc": "配置要聚合的输入端口，id 作为端口 ID，也是 JSON 对象中的 key。",
+        "extra": {
+          "effects": [
+            "cal_input_ports"
+          ],
+          "role": "json-build-inputs",
+          "template": {
+            "label": "",
+            "name": ""
+          }
+        },
+        "label": "字段配置",
+        "name": "fields",
+        "required": false,
+        "type": "array",
+        "widget": "ports-list"
+      }
+    ],
+    "type": "json-build"
+  },
+  {
+    "category": "逻辑",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "执行自定义 Python 代码，对输入做任意处理并输出结果",
+    "icon": "code",
+    "inputs": [],
+    "label": "代码",
+    "outputs": [],
+    "parameters": [
+      {
+        "default": [
+          {
+            "label": "输入",
+            "name": "input",
+            "required": false
+          }
+        ],
+        "extra": {
+          "effects": [
+            "cal_input_ports"
+          ],
+          "role": "code-input-ports",
+          "template": {
+            "label": "",
+            "name": ""
+          }
+        },
+        "label": "输入端口",
+        "name": "inputPorts",
+        "required": false,
+        "type": "array",
+        "widget": "ports-list"
+      },
+      {
+        "default": [
+          {
+            "label": "输出",
+            "name": "output",
+            "required": false
+          }
+        ],
+        "extra": {
+          "effects": [
+            "cal_output_ports"
+          ],
+          "role": "code-output-ports",
+          "template": {
+            "label": "",
+            "name": ""
+          }
+        },
+        "label": "输出端口",
+        "name": "outputPorts",
+        "required": false,
+        "type": "array",
+        "widget": "ports-list"
+      },
+      {
+        "default": "python",
+        "extra": {
+          "options": [
+            {
+              "label": "Python",
+              "value": "python"
+            }
+          ]
+        },
+        "label": "语言",
+        "name": "lang",
+        "required": true,
+        "type": "string",
+        "widget": "select"
+      },
+      {
+        "desc": "实现 run(inputs: dict, params: dict) -> Any；单输出端口可返回任意类型，多输出端口必须返回 dict 以端口 id 为 key。",
+        "extra": {
+          "language": "python"
+        },
+        "label": "代码",
+        "name": "code",
+        "required": true,
+        "type": "string",
+        "widget": "code-editor"
+      }
+    ],
+    "type": "code"
+  },
+  {
+    "category": "IO",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "调用外部 HTTP 接口，返回状态码、响应头和响应体",
+    "icon": "http",
+    "inputs": [
+      {
+        "label": "URL",
+        "name": "url",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "HTTP 方法",
+        "name": "method",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "请求 Body",
+        "name": "body",
+        "required": false,
+        "type": "any"
+      },
+      {
+        "label": "文件 (支持单个或列表)",
+        "name": "files",
+        "required": false,
+        "type": [
+          "object",
+          "array"
+        ]
+      },
+      {
+        "label": "附加参数",
+        "name": "extras",
+        "required": false,
+        "type": [
+          "object",
+          "string"
+        ]
+      }
+    ],
+    "label": "HTTP 请求",
+    "outputs": [
+      {
+        "label": "状态码",
+        "name": "status",
+        "required": true,
+        "type": "number"
+      },
+      {
+        "label": "响应头",
+        "name": "headers",
+        "required": false,
+        "type": "object"
+      },
+      {
+        "label": "响应体",
+        "name": "body",
+        "required": false,
+        "type": "any"
+      }
+    ],
+    "parameters": [
+      {
+        "label": "超时时间（秒）",
+        "name": "timeout",
+        "required": false,
+        "type": "number",
+        "widget": "input"
+      },
+      {
+        "label": "重试次数",
+        "name": "retry",
+        "required": false,
+        "type": "number",
+        "widget": "input"
+      }
+    ],
+    "type": "http-request"
+  },
+  {
+    "category": "IO",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "通过 SMTP/SMTPS 发送邮件，支持 STARTTLS 和附件",
+    "icon": "mail",
+    "inputs": [
+      {
+        "label": "收件人",
+        "name": "to",
+        "required": true,
+        "type": [
+          "string",
+          "array"
+        ]
+      },
+      {
+        "label": "主题",
+        "name": "subject",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "正文",
+        "name": "body",
+        "required": false,
+        "type": [
+          "string",
+          "object"
+        ]
+      },
+      {
+        "label": "附件",
+        "name": "attachments",
+        "required": false,
+        "type": [
+          "object",
+          "array"
+        ]
+      }
+    ],
+    "label": "邮件发送",
+    "outputs": [
+      {
+        "label": "是否成功",
+        "name": "ok",
+        "required": true,
+        "type": "boolean"
+      },
+      {
+        "label": "Message-ID",
+        "name": "message_id",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "日志",
+        "name": "log",
+        "required": false,
+        "type": "string"
+      }
+    ],
+    "parameters": [
+      {
+        "label": "SMTP 服务器",
+        "name": "server",
+        "required": true,
+        "type": "string",
+        "widget": "input"
+      },
+      {
+        "default": 587,
+        "label": "端口",
+        "name": "port",
+        "required": false,
+        "type": "number",
+        "widget": "input"
+      },
+      {
+        "label": "账号",
+        "name": "username",
+        "required": false,
+        "type": "string",
+        "widget": "input"
+      },
+      {
+        "label": "密码/授权码",
+        "name": "password",
+        "required": false,
+        "type": "string",
+        "widget": "secret"
+      },
+      {
+        "label": "发件人",
+        "name": "from",
+        "required": false,
+        "type": "string",
+        "widget": "input"
+      },
+      {
+        "default": false,
+        "label": "使用 SMTPS (465)",
+        "name": "use_ssl",
+        "type": "boolean",
+        "widget": "switch"
+      },
+      {
+        "default": true,
+        "label": "启用 STARTTLS",
+        "name": "use_starttls",
+        "type": "boolean",
+        "widget": "switch"
+      },
+      {
+        "label": "超时（秒）",
+        "name": "timeout",
+        "required": false,
+        "type": "number",
+        "widget": "input"
+      }
+    ],
+    "type": "email-send"
+  },
+  {
+    "category": "逻辑",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "使用 {{path}} 占位符从输入 JSON 中取值并渲染为字符串",
+    "icon": "json",
+    "inputs": [
+      {
+        "desc": "模板变量来源：对象或 JSON 字符串；若为非对象，将作为变量 value 提供",
+        "label": "上下文",
+        "name": "context",
+        "required": false,
+        "type": [
+          "object",
+          "array",
+          "string"
+        ]
+      }
+    ],
+    "label": "模板字符串",
+    "outputs": [
+      {
+        "label": "结果字符串",
+        "name": "text",
+        "required": true,
+        "type": "string"
+      }
+    ],
+    "parameters": [
+      {
+        "desc": "使用 {{path}} 作为占位符，path 语法同 JSON 提取节点",
+        "extra": {
+          "placeholder": "例如：你好，{{user.name}}，今天是 {{date}}。"
+        },
+        "label": "模板",
+        "name": "template",
+        "required": true,
+        "type": "string",
+        "widget": "textarea"
+      }
+    ],
+    "type": "string-template"
+  },
+  {
+    "category": "逻辑",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "解析字符串为 JSON，对无效 JSON 可选择容错",
+    "icon": "text-to-json",
+    "inputs": [
+      {
+        "label": "文本",
+        "name": "text",
+        "required": true,
+        "type": "string"
+      }
+    ],
+    "label": "文本转JSON",
+    "outputs": [
+      {
+        "label": "JSON",
+        "name": "json",
+        "required": false,
+        "type": "any"
+      },
+      {
+        "label": "是否成功",
+        "name": "ok",
+        "required": false,
+        "type": "boolean"
+      },
+      {
+        "label": "错误信息",
+        "name": "error",
+        "required": false,
+        "type": "string"
+      }
+    ],
+    "parameters": [
+      {
+        "default": true,
+        "label": "严格模式",
+        "name": "strict",
+        "type": "boolean",
+        "widget": "switch"
+      },
+      {
+        "desc": "可选，从解析结果中按路径提取子字段，如 data.items[0]",
+        "label": "JSON 路径",
+        "name": "json_path",
+        "required": false,
+        "type": "string",
+        "widget": "input"
+      }
+    ],
+    "type": "text-to-json"
+  },
+  {
+    "category": "IO",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "接收上游文本，在前端以自定义样式展示",
+    "icon": "renderer",
+    "inputs": [
+      {
+        "desc": "要展示的文本，可为字符串/对象/数组，由前端决定展示方式",
+        "label": "文本输入",
+        "name": "text",
+        "required": true,
+        "type": [
+          "string",
+          "object",
+          "array"
+        ]
+      }
+    ],
+    "label": "文本渲染",
+    "outputs": [],
+    "parameters": [
+      {
+        "default": "渲染结果",
+        "extra": {
+          "placeholder": "例如：LLM 输出预览"
+        },
+        "label": "显示标题",
+        "name": "title",
+        "required": false,
+        "type": "string",
+        "uiPlacement": "node-body",
+        "widget": "input"
+      }
+    ],
+    "type": "renderer"
+  },
+  {
+    "category": "逻辑",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [],
+    "description": "按顺序执行布尔表达式，命中分支触发控制流，未命中可走默认分支",
+    "icon": "branch",
+    "inputs": [
+      {
+        "label": "输入",
+        "name": "input",
+        "required": false,
+        "type": "any"
+      },
+      {
+        "label": "上下文",
+        "name": "context",
+        "required": false,
+        "type": "object"
+      }
+    ],
+    "label": "分支",
+    "outputs": [
+      {
+        "label": "命中分支列表",
+        "name": "__matched",
+        "required": false,
+        "type": "array"
+      }
+    ],
+    "parameters": [
+      {
+        "desc": "expr 为受限 Python 表达式，仅可引用 input/context；分支 name 决定控制输出端口。",
+        "extra": {
+          "effects": [
+            "cal_control_output_ports"
+          ],
+          "role": "branch-cases",
+          "template": {
+            "expr": "",
+            "label": "",
+            "name": ""
+          }
+        },
+        "label": "分支列表",
+        "name": "cases",
+        "required": true,
+        "type": "array",
+        "widget": "ports-list"
+      },
+      {
+        "desc": "无分支命中时使用该分支名称触发；留空则依据 allow_empty 抛错或返回空。",
+        "label": "默认分支",
+        "name": "default",
+        "required": false,
+        "type": "string",
+        "widget": "input"
+      },
+      {
+        "default": "first_match",
+        "extra": {
+          "options": [
+            {
+              "label": "首个命中",
+              "value": "first_match"
+            },
+            {
+              "label": "全部命中",
+              "value": "all_match"
+            }
+          ]
+        },
+        "label": "匹配模式",
+        "name": "mode",
+        "required": false,
+        "type": "string",
+        "widget": "select"
+      },
+      {
+        "default": false,
+        "label": "允许无匹配",
+        "name": "allow_empty",
+        "required": false,
+        "type": "boolean",
+        "widget": "switch"
+      }
+    ],
+    "type": "branch"
+  },
+  {
+    "category": "AI",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "调用大模型，支持插件与工具调用；未启用工具时可作为普通对话使用",
+    "icon": "llm",
+    "inputs": [
+      {
+        "label": "消息",
+        "name": "message",
+        "required": true,
+        "type": "string",
+        "widget": "textarea"
+      },
+      {
+        "label": "会话 ID",
+        "name": "session_id",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "附件",
+        "name": "attachments",
+        "required": false,
+        "type": "array"
+      }
+    ],
+    "label": "大模型",
+    "outputs": [
+      {
+        "label": "文本输出",
+        "name": "text",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "原始响应",
+        "name": "raw",
+        "required": false,
+        "type": "object"
+      }
+    ],
+    "parameters": [
+      {
+        "extra": {
+          "objectSchema": [
+            {
+              "default": "platform",
+              "extra": {
+                "options": [
+                  {
+                    "label": "平台模型",
+                    "value": "platform"
+                  },
+                  {
+                    "label": "自定义",
+                    "value": "custom"
+                  }
+                ]
+              },
+              "label": "模型来源",
+              "name": "source",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "default": "devstral2",
+              "desc": "平台可用模型列表（后端提供）",
+              "extra": {
+                "options": [
+                  {
+                    "label": "Devstral2",
+                    "value": "devstral2"
+                  },
+                  {
+                    "label": "DeepSeek R1 Qwen-7B @ SiliconFlow",
+                    "value": "deepseek_sf_r1_qwen7b"
+                  },
+                  {
+                    "label": "GLM-4-9B (2024-04-14) @ SiliconFlow",
+                    "value": "glm4_sf_9b_0414"
+                  }
+                ]
+              },
+              "label": "平台模型",
+              "name": "preset",
+              "type": "string",
+              "widget": "select"
+            },
+            {
+              "label": "Base URL",
+              "name": "base_url",
+              "type": "string",
+              "widget": "input"
+            },
+            {
+              "label": "API Key",
+              "name": "api_key",
+              "type": "string",
+              "widget": "secret"
+            },
+            {
+              "label": "模型标识",
+              "name": "model",
+              "type": "string",
+              "widget": "input"
+            },
+            {
+              "default": false,
+              "label": "支持视觉输入",
+              "name": "supports_vision",
+              "type": "boolean",
+              "widget": "switch"
+            },
+            {
+              "default": false,
+              "label": "支持音频输入",
+              "name": "supports_audio",
+              "type": "boolean",
+              "widget": "switch"
+            }
+          ],
+          "placeholder": "选择平台模型或自定义模型"
+        },
+        "label": "模型配置",
+        "name": "model_config",
+        "required": false,
+        "type": "object",
+        "widget": "model-picker"
+      },
+      {
+        "default": 0.7,
+        "extra": {
+          "max": 1.0,
+          "min": 0.0,
+          "step": 0.1
+        },
+        "label": "温度",
+        "name": "temperature",
+        "type": "number",
+        "widget": "slider"
+      },
+      {
+        "label": "系统提示词（可选）",
+        "name": "system_prompt",
+        "required": false,
+        "type": "string",
+        "widget": "textarea"
+      },
+      {
+        "label": "插件列表",
+        "name": "plugins",
+        "required": false,
+        "type": "array",
+        "widget": "plugin-list"
+      },
+      {
+        "desc": "OpenAI tools 数组；若为空则不启用工具调用",
+        "label": "工具调用",
+        "name": "tools",
+        "required": false,
+        "type": "array",
+        "widget": "json"
+      }
+    ],
+    "type": "llm"
+  },
+  {
+    "category": "IO",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "通过 SSH 在远端执行命令，返回 stdout/stderr/exitCode",
+    "icon": "terminal",
+    "inputs": [
+      {
+        "label": "主机",
+        "name": "host",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "端口",
+        "name": "port",
+        "required": false,
+        "type": "number"
+      },
+      {
+        "label": "用户名",
+        "name": "username",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "密码",
+        "name": "password",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "私钥(PEM)",
+        "name": "privateKey",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "私钥口令",
+        "name": "passphrase",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "desc": "可输入多行文本或字符串数组，按原样发送远端 shell",
+        "label": "命令",
+        "name": "command",
+        "required": true,
+        "type": [
+          "string",
+          "array"
+        ]
+      },
+      {
+        "label": "环境变量",
+        "name": "env",
+        "required": false,
+        "type": "object"
+      },
+      {
+        "label": "工作目录",
+        "name": "workdir",
+        "required": false,
+        "type": "string"
+      }
+    ],
+    "label": "SSH",
+    "outputs": [
+      {
+        "label": "标准输出",
+        "name": "stdout",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "标准错误",
+        "name": "stderr",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "退出码",
+        "name": "exitCode",
+        "required": true,
+        "type": "number"
+      }
+    ],
+    "parameters": [
+      {
+        "default": 22,
+        "label": "默认端口",
+        "name": "port",
+        "type": "number",
+        "widget": "input"
+      },
+      {
+        "default": 30,
+        "label": "默认超时(秒)",
+        "name": "timeout",
+        "type": "number",
+        "widget": "input"
+      },
+      {
+        "default": true,
+        "label": "非零退出视为失败",
+        "name": "failOnNonZero",
+        "type": "boolean",
+        "widget": "switch"
+      },
+      {
+        "default": false,
+        "desc": "仅开发环境使用，生产请校验主机指纹",
+        "label": "忽略 HostKey",
+        "name": "ignoreHostKey",
+        "type": "boolean",
+        "widget": "switch"
+      }
+    ],
+    "type": "ssh"
+  },
+  {
+    "category": "Database",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "执行 Redis 命令 (GET, SET, DEL 等)",
+    "icon": "database",
+    "inputs": [
+      {
+        "default": "GET",
+        "label": "操作",
+        "name": "action",
+        "options": [
+          {
+            "label": "GET",
+            "value": "GET"
+          },
+          {
+            "label": "SET",
+            "value": "SET"
+          },
+          {
+            "label": "DEL",
+            "value": "DEL"
+          },
+          {
+            "label": "EXISTS",
+            "value": "EXISTS"
+          },
+          {
+            "label": "INCR",
+            "value": "INCR"
+          },
+          {
+            "label": "EXPIRE",
+            "value": "EXPIRE"
+          }
+        ],
+        "required": true,
+        "type": "string",
+        "widget": "select"
+      },
+      {
+        "label": "Key",
+        "name": "key",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Value (for SET/EXPIRE)",
+        "name": "value",
+        "required": false,
+        "type": "any"
+      },
+      {
+        "description": "JSON对象: {host, port, password, db} 或 redis:// URL 字符串",
+        "label": "连接信息",
+        "name": "connection",
+        "required": true,
+        "type": "object"
+      }
+    ],
+    "label": "Redis",
+    "outputs": [
+      {
+        "label": "执行结果",
+        "name": "result",
+        "required": true,
+        "type": "any"
+      }
+    ],
+    "type": "redis"
+  },
+  {
+    "category": "Messaging",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "发送消息到 RabbitMQ",
+    "icon": "message-square",
+    "inputs": [
+      {
+        "description": "amqp://user:pass@host:port/vhost",
+        "label": "连接信息",
+        "name": "connection",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Exchange",
+        "name": "exchange",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "Routing Key",
+        "name": "routing_key",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "Queue Name (for default exchange)",
+        "name": "queue",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "label": "Message Body",
+        "name": "message",
+        "required": true,
+        "type": "any"
+      },
+      {
+        "description": "delivery_mode, expiration, headers 等",
+        "label": "选项",
+        "name": "options",
+        "required": false,
+        "type": "object"
+      }
+    ],
+    "label": "RabbitMQ Publish",
+    "outputs": [
+      {
+        "label": "是否成功",
+        "name": "success",
+        "required": true,
+        "type": "boolean"
+      }
+    ],
+    "type": "rabbitmq"
+  },
+  {
+    "category": "Storage",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "从 S3 获取文件并返回文件引用",
+    "icon": "cloud-arrow-down",
+    "inputs": [
+      {
+        "description": "JSON对象: {access_key_id, secret_access_key, region_name, endpoint_url}",
+        "label": "连接信息",
+        "name": "connection",
+        "required": true,
+        "type": "object"
+      },
+      {
+        "label": "Bucket 名称",
+        "name": "bucket",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "对象 Key",
+        "name": "key",
+        "required": true,
+        "type": "string"
+      }
+    ],
+    "label": "S3 获取文件",
+    "outputs": [
+      {
+        "label": "文件引用",
+        "name": "file",
+        "required": true,
+        "type": "object"
+      }
+    ],
+    "type": "s3_get"
+  },
+  {
+    "category": "Storage",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "上传内容或文件引用到 S3",
+    "icon": "cloud-arrow-up",
+    "inputs": [
+      {
+        "description": "JSON对象: {access_key_id, secret_access_key, region_name, endpoint_url}",
+        "label": "连接信息",
+        "name": "connection",
+        "required": true,
+        "type": "object"
+      },
+      {
+        "label": "Bucket 名称",
+        "name": "bucket",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "对象 Key",
+        "name": "key",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "内容 (Text/Bytes/JSON)",
+        "name": "content",
+        "required": false,
+        "type": "any"
+      },
+      {
+        "label": "文件引用",
+        "name": "file",
+        "required": false,
+        "type": "object"
+      }
+    ],
+    "label": "S3 存放文件",
+    "outputs": [
+      {
+        "label": "是否成功",
+        "name": "success",
+        "required": true,
+        "type": "boolean"
+      },
+      {
+        "label": "上传的文件引用",
+        "name": "file",
+        "required": true,
+        "type": "object"
+      }
+    ],
+    "type": "s3_put"
+  },
+  {
+    "category": "Storage",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "列出 S3 Bucket 中的对象",
+    "icon": "view-list",
+    "inputs": [
+      {
+        "description": "JSON对象: {access_key_id, secret_access_key, region_name, endpoint_url}",
+        "label": "连接信息",
+        "name": "connection",
+        "required": true,
+        "type": "object"
+      },
+      {
+        "label": "Bucket 名称",
+        "name": "bucket",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "前缀 (Prefix)",
+        "name": "prefix",
+        "required": false,
+        "type": "string"
+      }
+    ],
+    "label": "S3 列出文件",
+    "outputs": [
+      {
+        "label": "文件引用列表",
+        "name": "files",
+        "required": true,
+        "type": "array"
+      }
+    ],
+    "type": "s3_list"
+  },
+  {
+    "category": "Database",
+    "controlInputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输入",
+        "name": "__ctl_in",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "controlOutputs": [
+      {
+        "extra": {
+          "kind": "control"
+        },
+        "label": "控制输出",
+        "name": "__ctl_out",
+        "required": false,
+        "type": "control"
+      }
+    ],
+    "description": "执行 SQL 查询或命令 (PostgreSQL)",
+    "icon": "database",
+    "inputs": [
+      {
+        "description": "postgresql+asyncpg://user:pass@host:port/dbname",
+        "label": "数据库连接 (DSN)",
+        "name": "connection",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "description": "使用 :param_name 作为参数占位符",
+        "label": "SQL 语句",
+        "name": "sql",
+        "required": true,
+        "type": "string",
+        "widget": "textarea"
+      },
+      {
+        "description": "对应 SQL 中的 :param_name",
+        "label": "参数 (JSON)",
+        "name": "parameters",
+        "required": false,
+        "type": "object"
+      }
+    ],
+    "label": "SQL 执行",
+    "outputs": [
+      {
+        "label": "查询结果",
+        "name": "rows",
+        "required": true,
+        "type": "array"
+      },
+      {
+        "label": "影响行数",
+        "name": "row_count",
+        "required": true,
+        "type": "number"
+      }
+    ],
+    "type": "sql-execute"
+  }
+]

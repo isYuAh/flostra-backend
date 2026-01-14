@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from nodes import get_node_cls
-from secrets_store import resolve_secret_value
+from secrets_store import resolve_secrets_in_params
 
 JsonDict = Dict[str, Any]
 
@@ -199,29 +199,6 @@ def _merge_inputs_for_node(
     return inputs
 
 
-def _resolve_secrets(obj: Any) -> Any:
-    """
-    预留的 Secret 解析入口：
-    - 识别 {"__kind": "secretRef", "id": "..."} 结构并替换为真实值
-    - 其它值保持不变，支持嵌套 dict / list
-    """
-    if isinstance(obj, dict):
-        # SecretRef 的约定结构
-        if obj.get("__kind") == "secretRef":
-            secret_id = obj.get("id")
-            if not secret_id:
-                raise ValueError("secretRef 缺少 id 字段")
-            # 运行时从内存存储中解析真实值
-            return resolve_secret_value(secret_id)
-
-        # 普通 dict，递归解析内部值
-        return {k: _resolve_secrets(v) for k, v in obj.items()}
-
-    if isinstance(obj, list):
-        return [_resolve_secrets(v) for v in obj]
-
-    return obj
-
 async def run_workflow(
     run_id: str,
     spec: RunWorkflowSpec,
@@ -327,6 +304,7 @@ async def run_workflow(
     # 在全局拓扑序基础上过滤得到本次实际执行顺序
     effective_order: List[str] = [nid for nid in topo_order if nid in reachable]
 
+    # 触发全局开始事件，便于前端/上游观察运行状态
     await emit(WorkflowEvent(event="workflow_started", data={"runId": run_id}))
 
     for node_id in effective_order:
@@ -341,6 +319,7 @@ async def run_workflow(
             )
             continue
 
+        # 广播节点开始
         await emit(
             WorkflowEvent(
                 event="node_started",
@@ -361,18 +340,21 @@ async def run_workflow(
             overrides_by_node=overrides_by_node,
         )
 
-        # 2) 解析 Secret：
-        safe_inputs = _resolve_secrets(inputs)
-        safe_params = _resolve_secrets(node.params)
+        # 2) 解析 Secret (Replacement):
+        # 仅对 params 进行 [[ KEY ]] 替换，inputs 保持原样
+        secret_map = (context or {}).get("secrets")
+        safe_params = resolve_secrets_in_params(node.params, secret_map) if secret_map else node.params
+        safe_inputs = inputs  # Inputs do not support secret replacement
 
         # 2.5) 注入运行上下文（只读），避免被 overrides 覆盖
-        if context is not None:
-            safe_inputs["__context"] = context
+        # if context is not None:
+        #    safe_inputs["__context"] = context # DEPRECATED: Passed via arg now
 
         # 3) 执行节点
         try:
             node_cls = get_node_cls(node.type)
-            outputs = await node_cls.run(safe_inputs, safe_params)
+            # Pass context explicitly
+            outputs = await node_cls.run(safe_inputs, safe_params, context=context)
 
             control_signals: Optional[Dict[str, bool]] = None
             data_outputs: Any = outputs
@@ -396,6 +378,7 @@ async def run_workflow(
                 if allowed_ports is None or e.source_port_id in allowed_ports:
                     control_fired.add(e.id)
 
+            # 节点运行成功
             await emit(
                 WorkflowEvent(
                     event="node_completed",
@@ -410,6 +393,7 @@ async def run_workflow(
             )
         except Exception as exc:  # noqa: BLE001
             # 节点失败时，整个 workflow 直接失败并结束
+            # 节点失败：短路整个 workflow
             await emit(
                 WorkflowEvent(
                     event="node_completed",
@@ -445,6 +429,7 @@ async def run_workflow(
             reachable_sinks = [nid for nid in sink_nodes if nid in reachable]
             targets = reachable_sinks
 
+    # 聚合目标节点输出，保持返回结构稳定
     results_dict: Dict[str, Any] = {
         nid: context_outputs.get(nid) for nid in targets if nid in context_outputs
     }

@@ -41,7 +41,7 @@ class TextToJsonNode(WorkflowNode):
         }
 
     @classmethod
-    async def run(cls, inputs: JsonDict, params: JsonDict) -> JsonDict:
+    async def run(cls, inputs: JsonDict, params: JsonDict, context: JsonDict = None) -> JsonDict:
         raw = inputs.get("text", "")
         text = str(raw)
         strict = bool(params.get("strict", True))

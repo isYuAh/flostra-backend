@@ -65,7 +65,7 @@ class WorkflowNode(ABC):
 
     @classmethod
     @abstractmethod
-    async def run(cls, inputs: JsonDict, params: JsonDict) -> JsonDict:
+    async def run(cls, inputs: JsonDict, params: JsonDict, context: JsonDict = None) -> JsonDict:
         """执行节点逻辑，所有 I/O 都在后端完成"""
 
 

@@ -118,7 +118,7 @@ class SSHNode(WorkflowNode):
         }
 
     @classmethod
-    async def run(cls, inputs: JsonDict, params: JsonDict) -> JsonDict:
+    async def run(cls, inputs: JsonDict, params: JsonDict, context: JsonDict = None) -> JsonDict:
         host = inputs.get("host") or params.get("host")
         username = inputs.get("username") or params.get("username")
         if not host or not username:

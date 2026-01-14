@@ -2,6 +2,7 @@ import asyncio
 import copy
 import json
 import time
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -27,6 +28,7 @@ from db import get_session, Workflow
 HEARTBEAT_INTERVAL_SECONDS = 10.0
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class WorkflowNodeModel(BaseModel):
@@ -121,6 +123,17 @@ async def start_workflow_run(payload: RunWorkflowRequestModel, session: AsyncSes
     )
     RUNS[run_id] = state
 
+    logger.info(
+        "HTTP run request: runId=%s workflowId=%s nodes=%d edges=%d entry=%s targets=%s overrides=%d",
+        run_id,
+        payload.workflowId,
+        len(payload.nodes),
+        len(payload.edges),
+        payload.entryNodes,
+        payload.targets,
+        len(payload.overrides),
+    )
+
     async def emit(event: WorkflowEvent) -> None:
         # 根据事件更新 RunState 的整体状态
         if event.event == "workflow_completed":
@@ -167,6 +180,9 @@ async def start_workflow_run(payload: RunWorkflowRequestModel, session: AsyncSes
     async def runner() -> None:
         try:
             await run_workflow(run_id=run_id, spec=spec, emit=emit, context={})
+            logger.info("HTTP run finished: runId=%s status=%s", run_id, state.status.value)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("HTTP run failed: runId=%s", run_id)
         finally:
             # 通知 SSE 结束
             await queue.put(

@@ -96,7 +96,7 @@ class CodeNode(WorkflowNode):
         }
 
     @classmethod
-    async def run(cls, inputs: JsonDict, params: JsonDict) -> JsonDict:
+    async def run(cls, inputs: JsonDict, params: JsonDict, context: JsonDict = None) -> JsonDict:
         lang = (params.get("lang") or "python").lower()
         if lang != "python":
             raise ValueError(f"暂不支持语言 {lang!r}，当前仅支持 'python'")
@@ -119,9 +119,17 @@ class CodeNode(WorkflowNode):
         if not callable(func):
             raise ValueError("代码节点必须在代码中定义函数 run(inputs, params)")
 
+        import inspect
+
+        sig = inspect.signature(func)
+        param_count = len(sig.parameters)
+
         loop = asyncio.get_event_loop()
 
         def _call_user() -> Any:
+            # 支持 run(inputs, params, context) 或 run(inputs, params)
+            if param_count >= 3:
+                return func(inputs, params, context)
             return func(inputs, params)
 
         try:

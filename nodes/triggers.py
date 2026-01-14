@@ -41,7 +41,7 @@ class ManualStartNode(WorkflowNode):
         }
 
     @classmethod
-    async def run(cls, inputs: JsonDict, params: JsonDict) -> JsonDict:
+    async def run(cls, inputs: JsonDict, params: JsonDict, context: JsonDict = None) -> JsonDict:
         # 透传 payload，供下游节点使用
         return {"payload": inputs.get("payload")}
 
@@ -114,9 +114,8 @@ class HttpStartNode(WorkflowNode):
         }
 
     @classmethod
-    async def run(cls, inputs: JsonDict, params: JsonDict) -> JsonDict:
-        # 从运行上下文获取请求（若有）
-        context = inputs.get("__context") or {}
+    async def run(cls, inputs: JsonDict, params: JsonDict, context: JsonDict = None) -> JsonDict:
+        context = context or {}
         ctx_request = context.get("request") if isinstance(context, dict) else None
 
         def _to_dict(val: Any) -> Dict[str, Any]:

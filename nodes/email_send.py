@@ -6,9 +6,11 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from email.utils import make_msgid
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 from .base import JsonDict, WorkflowNode, register_node
+from io_utils import FileIoService
+from runtime_files import is_file_ref
 
 
 @register_node
@@ -17,6 +19,7 @@ class EmailSendNode(WorkflowNode):
     邮件发送节点（仅 SMTP/SMTPS）：
     - 参数配置服务器、账户、TLS 方式
     - 输入端口提供收件人、标题、正文
+    - 支持附件
     """
 
     type = "email-send"
@@ -26,13 +29,14 @@ class EmailSendNode(WorkflowNode):
         return {
             "type": cls.type,
             "label": "邮件发送",
-            "description": "通过 SMTP/SMTPS 发送邮件，支持 STARTTLS",
+            "description": "通过 SMTP/SMTPS 发送邮件，支持 STARTTLS 和附件",
             "category": "IO",
             "icon": "mail",
             "inputs": [
                 {"name": "to", "label": "收件人", "type": ["string", "array"], "required": True},
                 {"name": "subject", "label": "主题", "type": "string", "required": False},
                 {"name": "body", "label": "正文", "type": ["string", "object"], "required": False},
+                {"name": "attachments", "label": "附件", "type": ["object", "array"], "required": False},
             ],
             "outputs": [
                 {"name": "ok", "label": "是否成功", "type": "boolean", "required": True},
@@ -52,7 +56,7 @@ class EmailSendNode(WorkflowNode):
         }
 
     @classmethod
-    async def run(cls, inputs: JsonDict, params: JsonDict) -> JsonDict:
+    async def run(cls, inputs: JsonDict, params: JsonDict, context: JsonDict = None) -> JsonDict:
         server = params.get("server")
         if not server:
             raise ValueError("邮件发送节点缺少 server 参数")
@@ -61,10 +65,29 @@ class EmailSendNode(WorkflowNode):
         recipients = cls._normalize_recipients(raw_to)
         if not recipients:
             raise ValueError("邮件发送节点缺少收件人 to")
+        
+        if not context:
+            raise ValueError("EmailSend节点需要运行时上下文")
 
         subject = inputs.get("subject") or ""
         body = inputs.get("body")
         body_text = body if isinstance(body, str) else json.dumps(body, ensure_ascii=False) if body is not None else ""
+        
+        # 预加载附件数据 (Async Step)
+        attachments_data: List[Tuple[bytes, str, str]] = [] # (content, filename, mime)
+        raw_attachments = inputs.get("attachments")
+        if raw_attachments:
+            list_attachments = []
+            if isinstance(raw_attachments, list):
+                list_attachments = raw_attachments
+            elif isinstance(raw_attachments, dict):
+                list_attachments = [raw_attachments]
+            
+            for att in list_attachments:
+                if is_file_ref(att):
+                    # Await IO here before going into sync executor
+                    content, name, mime = await FileIoService.get_file_bytes(context, att)
+                    attachments_data.append((content, name, mime or "application/octet-stream"))
 
         port = int(params.get("port") or 587)
         use_ssl = bool(params.get("use_ssl", False))
@@ -89,6 +112,12 @@ class EmailSendNode(WorkflowNode):
         msg["Message-ID"] = make_msgid()
         msg.set_content(str(body_text))
 
+        # Attach files
+        for content, filename, mime in attachments_data:
+            # Simple heuristic for maintype/subtype
+            maintype, subtype = mime.split("/", 1) if "/" in mime else ("application", "octet-stream")
+            msg.add_attachment(content, maintype=maintype, subtype=subtype, filename=filename)
+
         loop = asyncio.get_event_loop()
 
         def _send_email() -> str:
@@ -103,8 +132,8 @@ class EmailSendNode(WorkflowNode):
 
             try:
                 if use_ssl:
-                    context = ssl.create_default_context()
-                    smtp = smtplib.SMTP_SSL(server, port, timeout=timeout, context=context)
+                    context_ssl = ssl.create_default_context()
+                    smtp = smtplib.SMTP_SSL(server, port, timeout=timeout, context=context_ssl)
                     try:
                         cls._maybe_login(smtp, username, password)
                         smtp.send_message(msg)
@@ -115,8 +144,8 @@ class EmailSendNode(WorkflowNode):
                     try:
                         smtp.ehlo()
                         if use_starttls:
-                            context = ssl.create_default_context()
-                            smtp.starttls(context=context)
+                            context_ssl = ssl.create_default_context()
+                            smtp.starttls(context=context_ssl)
                             smtp.ehlo()
                         cls._maybe_login(smtp, username, password)
                         smtp.send_message(msg)
@@ -129,26 +158,3 @@ class EmailSendNode(WorkflowNode):
         message_id = await loop.run_in_executor(None, _send_email)
 
         return {"ok": True, "message_id": message_id, "log": f"sent to {len(recipients)} recipient(s)"}
-
-    @staticmethod
-    def _normalize_recipients(raw: Any) -> List[str]:
-        if raw is None:
-            return []
-        if isinstance(raw, str):
-            parts = [p.strip() for p in raw.split(",") if p.strip()]
-            return list(dict.fromkeys(parts))
-        if isinstance(raw, list):
-            parts: List[str] = []
-            for item in raw:
-                if not isinstance(item, str):
-                    continue
-                addr = item.strip()
-                if addr:
-                    parts.append(addr)
-            return list(dict.fromkeys(parts))
-        return []
-
-    @staticmethod
-    def _maybe_login(smtp: smtplib.SMTP, username: Optional[str], password: Optional[str]) -> None:
-        if username and password:
-            smtp.login(username, password)
